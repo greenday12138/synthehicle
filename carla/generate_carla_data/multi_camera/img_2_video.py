@@ -1,14 +1,17 @@
 import cv2
 import os
 
+
 def img2video(cam_list):
-    cam = cam_list
-    for i in range(len(cam)):
+    cams = os.listdir(cam_list)
 
-        image_folder = f'{cam[i]}/out_rgb_bbox'
-        video_name = f'{cam[i]}/video.avi'
+    for cam in cams:
 
-        images = [img for img in os.listdir(image_folder) if img.endswith(".png")]
+        image_folder = f'{cam_list}/{cam}/out_rgb'
+        video_name = f'{cam_list}/{cam}/video.mp4'
+
+        images = [img for img in os.listdir(
+            image_folder) if img.endswith(".jpg")]
         images.sort()
         frame = cv2.imread(os.path.join(image_folder, images[0]))
         height, width, layers = frame.shape
@@ -23,6 +26,8 @@ def img2video(cam_list):
         cv2.destroyAllWindows()
         video.release()
 
+
+#img2video("/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/rain_2023-12-31_23-31-42")
 # def main():
 
 

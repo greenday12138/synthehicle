@@ -14,6 +14,8 @@ from WeatherSelector import WeatherSelector
 import integrate_txt_file
 import img_2_video
 
+file_path = os.path.join(os.getcwd(), 'carla', 'generate_carla_data', 'multi_camera')
+
 
 def retrieve_data(sensor_queue, frame, timeout=1):
     while True:
@@ -50,15 +52,15 @@ def set_args():
         help="path to town information",
     )
     argparser.add_argument(
-        "--map_name", default="Town10HD", type=str, help="name of map: Town01-07"
+        "--map_name", default="Town05", type=str, help="name of map: Town01-07"
     )
     argparser.add_argument(
-        "--fps", default=0.1, type=float, help="fps of generated data"
+        "--fps", default=0.05, type=float, help="fps of generated data"
     )
     argparser.add_argument(
         "--overlap",
         help="set whether the cemera filed of view overlaps",
-        action="store_true",
+        default=False,
     )
     argparser.add_argument(
         "--save_video", default=False, type=bool, help="generate video file"
@@ -67,17 +69,17 @@ def set_args():
         "--save_lidar", default=False, type=bool, help="save lidar images"
     )
     argparser.add_argument(
-        "--number-of-vehicles",
-        default=250,
+        "--number_of_vehicles",
+        default=150,
         type=int,
         help="number of vehicles (default: 150)",
     )
     argparser.add_argument(
-        "--number_walker", default=30, type=int, help="number of walker (default: 20)"
+        "--number_walker", default=3, type=int, help="number of walker (default: 20)"
     )
     argparser.add_argument(
         "--weather_option",
-        default=3,
+        default=0,
         type=int,
         help="0: Day, 1: Dawn, 2: Rain, 4: Night",
     )
@@ -89,15 +91,17 @@ def set_args():
     )
     argparser.add_argument("--max_dist", default=120,
                            type=int, help="lidar range")
+    # 没起作用，plan to set in code
     argparser.add_argument(
-        "--resolution", default="1080p", type=str, help="resolution of generated images"
+        "--resolution", default="720p", type=str, help="resolution of generated images"
     )
     argparser.add_argument(
-        "--number_of_frame", default=1800, type=int, help="number of frames generated"
+        "--number_of_frame", default=10000, type=int, help="number of frames generated"
     )
+    # TODO:！！！
     argparser.add_argument(
         "--number_of_dangerous_vehicles",
-        default=10,
+        default=50,
         type=int,
         help="number of dangerous_vehicles",
     )
@@ -108,6 +112,28 @@ def set_args():
     args = argparser.parse_args()
     return args
 
+
+def remove_unnecessary_objects(world):
+    """Remove unuseful objects in the world, use opt maps for this function"""
+    def remove_object(world,objs,obj):
+        for ob in world.get_environment_objects(obj):
+            objs.add(ob.id)
+    world.unload_map_layer(carla.MapLayer.StreetLights)
+    world.unload_map_layer(carla.MapLayer.Buildings)
+    world.unload_map_layer(carla.MapLayer.Decals)
+    world.unload_map_layer(carla.MapLayer.Walls)
+    world.unload_map_layer(carla.MapLayer.Foliage)
+    world.unload_map_layer(carla.MapLayer.ParkedVehicles)
+    # world.unload_map_layer(carla.MapLayer.Particles)
+    world.unload_map_layer(carla.MapLayer.Ground)
+    labels=[carla.CityObjectLabel.TrafficSigns,carla.CityObjectLabel.Other,
+        carla.CityObjectLabel.Poles, carla.CityObjectLabel.Static,carla.CityObjectLabel.Dynamic,carla.CityObjectLabel.Buildings,
+        carla.CityObjectLabel.Fences, carla.CityObjectLabel.Walls,carla.CityObjectLabel.Vegetation,carla.CityObjectLabel.Ground]
+    objs = set()
+    for label in labels:
+        for obj in world.get_environment_objects(label):
+            objs.add(obj.id)
+    world.enable_environment_objects(objs, False)
 
 def main():
     args = set_args()
@@ -123,20 +149,34 @@ def main():
     vehicles_list = []
     nonvehicles_list = []
     num_cam = 0
-    image_resolution = {"1080p": [1920, 1080],
+    # set resolution
+    image_resolution = {"720p": [1280, 720], "1080p": [1920, 1080],
                         "4k": [3840, 2160], "8k": [7680, 4320]}
     client = carla.Client(args.host, args.port)
-    client.set_timeout(30.0)
-    client.load_world(args.map_name)
+    client.set_timeout(100.0)
+    map_name = args.map_name+'_Opt'
+    client.load_world(map_name)
+    # if args.map_name is "Town01":
+    #     args.number_of_vehicles = 150
+    #     args.number_of_dangerous_vehicles = 0
+    # else:
+    args.number_of_vehicles = 400
+    args.number_of_dangerous_vehicles = 50
     logger.info("***** Loading map *****")
     world = client.get_world()
-
+    # remove parked vehicle
+    world.unload_map_layer(carla.MapLayer.StreetLights)
+    # world.unload_map_layer(carla.MapLayer.Buildings)
+    world.unload_map_layer(carla.MapLayer.Decals)
+    # world.unload_map_layer(carla.MapLayer.Walls)
+    world.unload_map_layer(carla.MapLayer.Foliage)
+    world.unload_map_layer(carla.MapLayer.ParkedVehicles)
     if args.overlap:
-        town_info_path = os.path.join(args.output_path, "scenes")
+        town_info_path = os.path.join(file_path, args.output_path,  "scenes")
     elif not args.overlap:
-        town_info_path = os.path.join(args.output_path, "scenes_non_overlap")
+        town_info_path = os.path.join(file_path, args.output_path, "scenes_non_overlap")
 
-    town_path = f"{town_info_path}/{args.map_name}"
+    town_path = f"{town_info_path}/{map_name}"
     weather_condition = weather_dict[args.weather_option]
     scence_path = f'{town_path}/{weather_condition}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}/'
 
@@ -147,7 +187,7 @@ def main():
 
     files = os.listdir(f"{town_path}/camera_info")
     for file_name in files:
-        if "camera" in file_name:
+        if "camera" in file_name and file_name.endswith('txt'):
             num_cam += 1
 
     config_path = scence_path + "camera_name.txt"
@@ -157,12 +197,11 @@ def main():
         for i in range(int(num_cam / 2)):
             config_file.write(f"C0{i+1}\n")
         config_file.close()
-
     camera_data_path = []
     save_file = []
-    for i in range(int(num_cam / 2)):
+    for i in range(int(num_cam)):
         camera_data_path.append(f"{town_path}/camera_info/camera_{i + 1}.txt")
-    for i in range(int(num_cam / 2)):
+    for i in range(int(num_cam)):
         save_file.append(scence_path + "C%02d" % (i + 1))
         file_name = save_file[i] + "/"
         if not os.path.exists(os.path.dirname(file_name)):
@@ -198,6 +237,15 @@ def main():
             world.apply_settings(settings)
         else:
             synchronous_master = False
+
+        # set spectator
+        spectator = world.get_spectator()
+        spectator_location = carla.Location(x=30, y=-10, z=0)
+        spectator.set_transform(carla.Transform(spectator_location + carla.Location(z=350),
+                                                carla.Rotation(pitch=-90)))
+        
+        # town10 spectator: (30, -10, 250, pitch=-90)
+        world.tick()
         # --------------
         # Get blueprints
         # --------------
@@ -255,89 +303,119 @@ def main():
 
         all_vehicles = world.get_actors().filter("vehicle.*")
         # set several of the cars as dangerous car
-        for i in range(args.number_of_dangerous_vehicles):
-            danger_car = all_vehicles[i]
-            # crazy car ignore traffic light, do not keep safe distance, and very fast
-            traffic_manager.ignore_lights_percentage(danger_car, 100)
-            traffic_manager.distance_to_leading_vehicle(danger_car, 0)
-            traffic_manager.vehicle_percentage_speed_difference(
-                danger_car, -80)
-
+        for i in range(len(all_vehicles)):
+            if i < args.number_of_dangerous_vehicles:
+                danger_car = all_vehicles[i]
+                # crazy car ignore traffic light, do not keep safe distance, and very fast
+                # if i < args.number_of_dangerous_vehicles/4:
+                #     traffic_manager.ignore_lights_percentage(danger_car, 100)
+                traffic_manager.distance_to_leading_vehicle(danger_car, 5)
+                # traffic_manager.auto_lane_change(danger_car, False)
+                # traffic_manager.random_left_lanechange_percentage(
+                #     danger_car, 30)
+                # traffic_manager.random_right_lanechange_percentage(
+                #     danger_car, 30)
+                traffic_manager.vehicle_percentage_speed_difference(
+                    danger_car, -160)
+            else:
+                normal_car = all_vehicles[i]
+                # traffic_manager.auto_lane_change(normal_car, False)
+                # traffic_manager.random_left_lanechange_percentage(
+                #     normal_car, 5)
+                # traffic_manager.random_right_lanechange_percentage(
+                #     normal_car, 5)
+                possible_speed_different = [-60, -90, -100, -130, -140]
+                traffic_manager.vehicle_percentage_speed_difference(normal_car,
+                                                                    possible_speed_different[i % len(possible_speed_different)])
         logger.info("Created %d vehicles" % len(vehicles_list))
+
+        all_traffic_light = world.get_actors().filter("traffic.traffic_light*")
+
+        # ban all traffic lights and set to green
+        # for light in all_traffic_light:
+        #     # set to green and freeze
+        #     light.set_state(carla.TrafficLightState.Green)
+        #     light.freeze(True)
+
+        # set light time
+
+        for light in all_traffic_light:
+            light.set_red_time(15)
+            light.set_green_time(15)
 
         # -------------
         # Spawn Walkers
         # -------------
         # 1. take all the random locations to spawn
-        walkers_list = []
-        walker_spawn_points = []
-        for i in range(args.number_walker):
-            spawn_point = carla.Transform()
-            loc = world.get_random_location_from_navigation()
-            if loc != None:
-                spawn_point.location = loc
-                walker_spawn_points.append(spawn_point)
+        # walkers_list = []
+        # walker_spawn_points = []
+        # for i in range(args.number_walker):
+        #     spawn_point = carla.Transform()
+        #     loc = world.get_random_location_from_navigation()
+        #     if loc != None:
+        #         spawn_point.location = loc
+        #         walker_spawn_points.append(spawn_point)
 
-        # 2. we spawn the walker object
-        batch_walker = []
-        for spawn_point in walker_spawn_points:
-            walker_bp = random.choice(blueprintsWalkers)
-            # set as not invincible
-            if walker_bp.has_attribute("is_invincible"):
-                walker_bp.set_attribute("is_invincible", "false")
-            batch_walker.append(SpawnActor(walker_bp, spawn_point))
+        # # 2. we spawn the walker object
+        # batch_walker = []
+        # for spawn_point in walker_spawn_points:
+        #     walker_bp = random.choice(blueprintsWalkers)
+        #     # set as not invincible
+        #     if walker_bp.has_attribute("is_invincible"):
+        #         walker_bp.set_attribute("is_invincible", "false")
+        #     batch_walker.append(SpawnActor(walker_bp, spawn_point))
 
-        results = client.apply_batch_sync(batch_walker, True)
-        for i in range(len(results)):
-            if results[i].error:
-                logger.error(results[i].error)
-            else:
-                walkers_list.append({"id": results[i].actor_id})
+        # results = client.apply_batch_sync(batch_walker, True)
+        # for i in range(len(results)):
+        #     if results[i].error:
+        #         logger.error(results[i].error)
+        #     else:
+        #         walkers_list.append({"id": results[i].actor_id})
 
-        # 3. we spawn the walker controller
-        batch_controller = []
-        walker_controller_bp = world.get_blueprint_library().find(
-            "controller.ai.walker"
-        )
-        for i in range(len(walkers_list)):
-            batch_controller.append(
-                SpawnActor(
-                    walker_controller_bp, carla.Transform(
-                    ), walkers_list[i]["id"]
-                )
-            )
-        results = client.apply_batch_sync(batch_controller, True)
-        for i in range(len(results)):
-            if results[i].error:
-                logger.error(results[i].error)
-            else:
-                walkers_list[i]["con"] = results[i].actor_id
+        # # 3. we spawn the walker controller
+        # batch_controller = []
+        # walker_controller_bp = world.get_blueprint_library().find(
+        #     "controller.ai.walker"
+        # )
+        # for i in range(len(walkers_list)):
+        #     batch_controller.append(
+        #         SpawnActor(
+        #             walker_controller_bp, carla.Transform(
+        #             ), walkers_list[i]["id"]
+        #         )
+        #     )
+        # results = client.apply_batch_sync(batch_controller, True)
+        # for i in range(len(results)):
+        #     if results[i].error:
+        #         logger.error(results[i].error)
+        #     else:
+        #         walkers_list[i]["con"] = results[i].actor_id
 
-        # 4. we put altogether the walkers and controllers id to get the objects from their id
-        all_id = []
-        for i in range(len(walkers_list)):
-            all_id.append(walkers_list[i]["con"])
-            all_id.append(walkers_list[i]["id"])
+        # # 4. we put altogether the walkers and controllers id to get the objects from their id
+        # all_id = []
+        # for i in range(len(walkers_list)):
+        #     all_id.append(walkers_list[i]["con"])
+        #     all_id.append(walkers_list[i]["id"])
 
-        all_actors = world.get_actors(all_id)
+        # all_actors = world.get_actors(all_id)
 
-        # wait for a tick to ensure client receives the last transform of the walkers we have just created
-        # world.tick()
-        # world.wait_for_tick()
+        # # wait for a tick to ensure client receives the last transform of the walkers we have just created
+        # # world.tick()
+        # # world.wait_for_tick()
 
-        # 5. initialize each controller and set target to walk to (list is [controller, actor, controller, actor ...])
-        for i in range(0, len(all_id), 2):
-            # start walker
-            all_actors[i].start()
-            # set walk to random point
-            all_actors[i].go_to_location(
-                world.get_random_location_from_navigation())
-            # random max speed
-            all_actors[i].set_max_speed(
-                1 + random.random() / 2
-            )  # max speed between 1 and 2 (default is 1.4 m/s)
+        # # 5. initialize each controller and set target to walk to (list is [controller, actor, controller, actor ...])
+        # for i in range(0, len(all_id), 2):
+        #     # start walker
+        #     all_actors[i].start()
+        #     # set walk to random point
+        #     all_actors[i].go_to_location(
+        #         world.get_random_location_from_navigation())
+        #     # random max speed
+        #     all_actors[i].set_max_speed(
+        #         1 + random.random() / 2
+        #     )  # max speed between 1 and 2 (default is 1.4 m/s)
 
-        logger.info("Created %d walkers \n" % len(walkers_list))
+        # logger.info("Created %d walkers \n" % len(walkers_list))
         # -----------------------------
         # Spawn sensors
         # -----------------------------
@@ -351,18 +429,35 @@ def main():
         # -----------------------------------------
         # Get camera position and spawn rgb camera
         # -----------------------------------------
-        cam_bp = world.get_blueprint_library().find("sensor.camera.rgb")
-        cam_bp.set_attribute("sensor_tick", str(args.fps))
+        cam_bp_low_resolution = world.get_blueprint_library().find("sensor.camera.rgb")
+        cam_bp_low_resolution.set_attribute("sensor_tick", str(args.fps))
         # cam_bp.set_attribute('enable_postprocess_effects', str(False))
-        cam_bp.set_attribute("image_size_x", str(
-            image_resolution[args.resolution][0]))
-        cam_bp.set_attribute("image_size_y", str(
-            image_resolution[args.resolution][1]))
+        cam_bp_low_resolution.set_attribute("image_size_x", str(
+            image_resolution["720p"][0]))
+        cam_bp_low_resolution.set_attribute("image_size_y", str(
+            image_resolution["720p"][1]))
+
+        cam_bp_middle_resolution = world.get_blueprint_library().find("sensor.camera.rgb")
+        cam_bp_middle_resolution.set_attribute("sensor_tick", str(args.fps))
+        # cam_bp.set_attribute('enable_postprocess_effects', str(False))
+        cam_bp_middle_resolution.set_attribute("image_size_x", str(
+            image_resolution["720p"][0]))
+        cam_bp_middle_resolution.set_attribute("image_size_y", str(
+            image_resolution["720p"][1]))
 
         num_camera = len(camera_data_path)
+        print('numer of camera: ', num_camera)
         for i in range(num_camera):
             cam_transform = cva.get_camera_position(camera_data_path[i])
-            cam = world.spawn_actor(cam_bp, cam_transform)
+            # draw camera position and id
+            cva.draw_camera_position(camera_data_path[i], i+1, world)
+            if i % 2 != 0:
+                cam_transform.location.z = cam_transform.location.z
+                cam = world.spawn_actor(
+                    cam_bp_middle_resolution, cam_transform)
+            else:
+                cam_transform.location.z = cam_transform.location.z
+                cam = world.spawn_actor(cam_bp_low_resolution, cam_transform)
             nonvehicles_list.append(cam)
 
             cam_queue = queue.Queue()
@@ -388,8 +483,13 @@ def main():
 
         for i in range(num_camera):
             cam_transform = cva.get_camera_position(camera_data_path[i])
+            if i % 2 != 0:
+                cam_transform.location.z = cam_transform.location.z
+                lidar = world.spawn_actor(lidar_bp, cam_transform)
+            else:
+                cam_transform.location.z = cam_transform.location.z
+                lidar = world.spawn_actor(lidar_bp, cam_transform)
 
-            lidar = world.spawn_actor(lidar_bp, cam_transform)
             nonvehicles_list.append(lidar)
             lidar_queue = queue.Queue()
             lidar.listen(lidar_queue.put)
@@ -403,82 +503,82 @@ def main():
         # Spawn depth sensor
         # -------------------
 
-        depth_bp = world.get_blueprint_library().find("sensor.camera.depth")
-        depth_bp.set_attribute("sensor_tick", str(args.fps))
-        depth_bp.set_attribute(
-            "image_size_x", str(image_resolution[args.resolution][0])
-        )
-        depth_bp.set_attribute(
-            "image_size_y", str(image_resolution[args.resolution][1])
-        )
-        depth_bp.set_attribute("fov", "90")
+        # depth_bp = world.get_blueprint_library().find("sensor.camera.depth")
+        # depth_bp.set_attribute("sensor_tick", str(args.fps))
+        # depth_bp.set_attribute(
+        #     "image_size_x", str(image_resolution[args.resolution][0])
+        # )
+        # depth_bp.set_attribute(
+        #     "image_size_y", str(image_resolution[args.resolution][1])
+        # )
+        # depth_bp.set_attribute("fov", "90")
 
-        for i in range(num_camera):
-            cam_transform = cva.get_camera_position(camera_data_path[i])
-            depth_camera = world.spawn_actor(depth_bp, cam_transform)
-            nonvehicles_list.append(depth_camera)
+        # for i in range(num_camera):
+        #     cam_transform = cva.get_camera_position(camera_data_path[i])
+        #     depth_camera = world.spawn_actor(depth_bp, cam_transform)
+        #     nonvehicles_list.append(depth_camera)
 
-            depth_queue = queue.Queue()
-            depth_camera.listen(depth_queue.put)
-            q_list.append(depth_queue)
-            depth_idx = idx
-            idx = idx + 1
-            logger.info("**** Depth camera ready ****")
+        #     depth_queue = queue.Queue()
+        #     depth_camera.listen(depth_queue.put)
+        #     q_list.append(depth_queue)
+        #     depth_idx = idx
+        #     idx = idx + 1
+        #     logger.info("**** Depth camera ready ****")
 
         # -------------------
         # Spawn segmentation sensor
         # -------------------
-        segm_bp = world.get_blueprint_library().find(
-            "sensor.camera.semantic_segmentation"
-        )
-        segm_bp.set_attribute("sensor_tick", str(args.fps))
-        segm_bp.set_attribute("image_size_x", str(
-            image_resolution[args.resolution][0]))
-        segm_bp.set_attribute("image_size_y", str(
-            image_resolution[args.resolution][1]))
-        segm_bp.set_attribute("fov", "90")
+        # segm_bp = world.get_blueprint_library().find(
+        #     "sensor.camera.semantic_segmentation"
+        # )
+        # segm_bp.set_attribute("sensor_tick", str(args.fps))
+        # segm_bp.set_attribute("image_size_x", str(
+        #     image_resolution[args.resolution][0]))
+        # segm_bp.set_attribute("image_size_y", str(
+        #     image_resolution[args.resolution][1]))
+        # segm_bp.set_attribute("fov", "90")
 
-        iseg_bp = world.get_blueprint_library().find(
-            "sensor.camera.instance_segmentation"
-        )
-        iseg_bp.set_attribute("sensor_tick", str(args.fps))
-        iseg_bp.set_attribute("image_size_x", str(
-            image_resolution[args.resolution][0]))
-        iseg_bp.set_attribute("image_size_y", str(
-            image_resolution[args.resolution][1]))
-        iseg_bp.set_attribute("fov", "90")
+        # iseg_bp = world.get_blueprint_library().find(
+        #     "sensor.camera.instance_segmentation"
+        # )
+        # iseg_bp.set_attribute("sensor_tick", str(args.fps))
+        # iseg_bp.set_attribute("image_size_x", str(
+        #     image_resolution[args.resolution][0]))
+        # iseg_bp.set_attribute("image_size_y", str(
+        #     image_resolution[args.resolution][1]))
+        # iseg_bp.set_attribute("fov", "90")
 
-        for i in range(num_camera):
-            cam_transform = cva.get_camera_position(camera_data_path[i])
-            segm_camera = world.spawn_actor(segm_bp, cam_transform)
-            nonvehicles_list.append(segm_camera)
+        # for i in range(num_camera):
+        #     cam_transform = cva.get_camera_position(camera_data_path[i])
+        #     segm_camera = world.spawn_actor(segm_bp, cam_transform)
+        #     nonvehicles_list.append(segm_camera)
 
-            seg_queue = queue.Queue()
-            segm_camera.listen(seg_queue.put)
-            q_list.append(seg_queue)
-            segm_idx = idx
-            idx = idx + 1
-            logger.info("**** Semantic Segmentation camera ready ****")
+        #     seg_queue = queue.Queue()
+        #     segm_camera.listen(seg_queue.put)
+        #     q_list.append(seg_queue)
+        #     segm_idx = idx
+        #     idx = idx + 1
+        #     logger.info("**** Semantic Segmentation camera ready ****")
 
-        for i in range(num_camera):
-            cam_transform = cva.get_camera_position(camera_data_path[i])
-            iseg_camera = world.spawn_actor(iseg_bp, cam_transform)
-            nonvehicles_list.append(iseg_camera)
+        # for i in range(num_camera):
+        #     cam_transform = cva.get_camera_position(camera_data_path[i])
+        #     iseg_camera = world.spawn_actor(iseg_bp, cam_transform)
+        #     nonvehicles_list.append(iseg_camera)
 
-            iseg_queue = queue.Queue()
-            iseg_camera.listen(iseg_queue.put)
-            q_list.append(iseg_queue)
-            iseg_idx = idx
-            idx = idx + 1
-            logger.info("**** Instance Segmentation camera ready ****")
+        #     iseg_queue = queue.Queue()
+        #     iseg_camera.listen(iseg_queue.put)
+        #     q_list.append(iseg_queue)
+        #     iseg_idx = idx
+        #     idx = idx + 1
+        #     logger.info("**** Instance Segmentation camera ready ****")
 
         # ---------------
         # Begin the loop
         # ---------------
         time_sim = 0
         frame_number = 0
-        save_depth = True
-        save_segm = True
+        save_depth = False
+        save_segm = False
         logs_path = os.path.join(scence_path, "logs.txt")
         logger.info("**** Begin the loop ****")
         while True:
@@ -502,17 +602,21 @@ def main():
                 vehicles_raw = world.get_actors().filter("vehicle.*")
                 walker_raw = world.get_actors().filter("walker.*")
                 snap = data[tick_idx]
-
-                rgb_img = data[cam_idx - num_camera +
-                               1: lidar_idx - num_camera + 1]
-                lidar_img = data[
-                    lidar_idx - num_camera + 1: depth_idx - num_camera + 1
-                ]
-                depth_img = data[depth_idx - num_camera +
-                                 1: segm_idx - num_camera + 1]
-                segm_img = data[segm_idx - num_camera +
-                                1: iseg_idx - num_camera + 1]
-                iseg_img = data[iseg_idx - num_camera + 1:]
+                if save_depth and save_segm:
+                    rgb_img = data[cam_idx - num_camera +
+                                   1: lidar_idx - num_camera + 1]
+                    lidar_img = data[
+                        lidar_idx - num_camera + 1: depth_idx - num_camera + 1
+                    ]
+                    depth_img = data[depth_idx - num_camera +
+                                     1: segm_idx - num_camera + 1]
+                    segm_img = data[segm_idx - num_camera +
+                                    1: iseg_idx - num_camera + 1]
+                    iseg_img = data[iseg_idx - num_camera + 1:]
+                else:
+                    rgb_img = data[cam_idx - num_camera +
+                                   1: lidar_idx - num_camera + 1]
+                    lidar_img = data[lidar_idx - num_camera + 1:]
 
                 # Attach additional information to the snapshot
                 vehicles = cva.snap_processing(vehicles_raw, walker_raw, snap)
@@ -522,11 +626,9 @@ def main():
                     cam = nonvehicles_list[i]
                     Lidar_img = lidar_img[i]
                     Rgb_img = rgb_img[i]
-                    Depth_img = depth_img[i]
-                    Segm_img = segm_img[i]
-                    Iseg_img = iseg_img[i]
 
                     if save_depth:
+                        Depth_img = depth_img[i]
                         save_path = save_file[i] + "/out_depth"
                         if not os.path.exists(os.path.dirname(save_path)):
                             os.makedirs(os.path.dirname(save_path))
@@ -536,6 +638,8 @@ def main():
                         )
 
                     if save_segm:
+                        Segm_img = segm_img[i]
+                        Iseg_img = iseg_img[i]
                         save_path = save_file[i] + "/out_segm"
                         if not os.path.exists(os.path.dirname(save_path)):
                             os.makedirs(os.path.dirname(save_path))
@@ -555,7 +659,8 @@ def main():
                         cam,
                         Lidar_img,
                         show_img=Rgb_img,
-                        json_path="vehicle_class_json_file.txt",
+                        json_path=os.path.join(
+                            file_path, "vehicle_class_json_file.txt"),
                         path=save_file[i],
                         framenumber=frame_number,
                         max_dist=args.max_dist,
@@ -603,11 +708,11 @@ def main():
         client.apply_batch([carla.command.DestroyActor(x)
                            for x in vehicles_list])
 
-        logger.info("Destroying %d NPC walkers" % len(walkers_list))
+        # logger.info("Destroying %d NPC walkers" % len(walkers_list))
         # stop walker controllers (list is [controller, actor, controller, actor ...])
-        for i in range(0, len(all_id), 2):
-            all_actors[i].stop()
-        client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
+        # for i in range(0, len(all_id), 2):
+        #     all_actors[i].stop()
+        # client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
 
         logger.info("Destroying %d nonvehicles" % len(nonvehicles_list))
         client.apply_batch([carla.command.DestroyActor(x)

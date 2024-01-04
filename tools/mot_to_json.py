@@ -43,6 +43,7 @@ parser.add_argument(
     required=True,
     help="Path to output json file, e.g., predictions.json",
 )
+# python -m tools.mot_to_json -d {SYNTHEHICLE_DATA} -c splits/train.txt -o prediction.json -p prediction.txt
 
 args = parser.parse_args()
 

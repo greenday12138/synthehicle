@@ -61,7 +61,8 @@ def get_all_data(
     bounding_boxes_3d = [
         get_bounding_box(vehicle, camera) for vehicle in visible_vehicles
     ]
-    bounding_boxes_2d = [get_2d_bb(vehicle, camera) for vehicle in visible_vehicles]
+    bounding_boxes_2d = [get_2d_bb(vehicle, camera)
+                         for vehicle in visible_vehicles]
     world_coords = [
         vehicle_to_world(create_bb_points(vehicle), vehicle)
         for vehicle in visible_vehicles
@@ -84,6 +85,7 @@ def get_all_data(
         bb_ymin = bb[0][1]
         bb_xmax = bb[1][0]
         bb_ymax = bb[1][1]
+        # 检测框太小的就删了
         if math.ceil(bb_xmax - bb_xmin) <= 32 or math.ceil(bb_ymax - bb_ymin) <= 32:
             continue
         filtered_bb_3d_lidar.append(db3)
@@ -94,7 +96,8 @@ def get_all_data(
         locations.append([t.location.x, t.location.y, t.location.z])
         rotations.append([t.rotation.pitch, t.rotation.yaw, t.rotation.roll])
 
-    filtered_vehicles_id_lidar = {v.id: v.type_id for v in filtered_vehicle_lidar}
+    filtered_vehicles_id_lidar = {
+        v.id: v.type_id for v in filtered_vehicle_lidar}
     bounding_boxes_2d_final = filtered_bb_2d_lidar
     bounding_boxes_3d_final = filtered_bb_3d_lidar
 
@@ -108,7 +111,8 @@ def get_all_data(
     filtered_out["rotations"] = rotations
 
     if json_path is not None:
-        filtered_out["class"] = get_vehicle_class(filtered_out["vehicles"], json_path)
+        filtered_out["class"] = get_vehicle_class(
+            filtered_out["vehicles"], json_path)
     return filtered_out, filtered_data
 
 
@@ -211,9 +215,47 @@ def get_camera_position(json_path=None):
     yaw = math.degrees(camera_info["yaw"])
     roll = math.degrees(camera_info["roll"])
     T = carla.Transform(
-        carla.Location(x=x, y=y, z=z), carla.Rotation(pitch=pitch, yaw=yaw, roll=roll)
+        carla.Location(x=x, y=y, z=z), carla.Rotation(
+            pitch=pitch, yaw=yaw, roll=roll)
     )
     return T
+
+
+# def get_noise_camera_position(json_path=None):
+#     f = open(json_path)
+#     camera_data = json.load(f)
+#     camera_info = camera_data
+#     x = camera_info["x"]
+#     y = camera_info["y"]
+#     z = camera_info["z"]
+#     pitch = math.degrees(camera_info["pitch"])
+#     yaw = math.degrees(camera_info["yaw"])
+#     roll = math.degrees(camera_info["roll"])
+#     T = carla.Transform(
+#         carla.Location(x=x, y=y, z=z), carla.Rotation(
+#             pitch=pitch, yaw=yaw, roll=roll)
+#     )
+#     return T
+
+
+def draw_camera_position(json_path, camera_id, world):
+    f = open(json_path)
+    camera_data = json.load(f)
+    camera_info = camera_data
+    x = camera_info["x"]
+    y = camera_info["y"]
+    z = camera_info["z"]
+    location = carla.Location(x=x, y=y, z=z)
+    text = str(camera_data)
+    # pitch = math.degrees(camera_info["pitch"])
+    # yaw = math.degrees(camera_info["yaw"])
+    # roll = math.degrees(camera_info["roll"])
+    # if camera_id == 1:
+    #     world.debug.draw_point(location=location, color=carla.Color(0, 255, 0), size=0.6, life_time=0)
+    # else:
+    #     world.debug.draw_point(location=location, size=0.3, life_time=0)
+    # world.debug.draw_string(location=location, text=text,
+    #                         draw_shadow=True, life_time=0)
 
 
 def get_camera_position_matrix(json_path=None):
@@ -341,7 +383,8 @@ def get_list_transform(vehicles_list, sensor):
         t_list.append(transform)
     t_list = np.array(t_list).reshape((len(t_list), 6))
 
-    transform_h = np.concatenate((t_list[:, :3], np.ones((len(t_list), 1))), axis=1)
+    transform_h = np.concatenate(
+        (t_list[:, :3], np.ones((len(t_list), 1))), axis=1)
     sensor_world_matrix = get_matrix(sensor.get_transform())
     world_sensor_matrix = np.linalg.inv(sensor_world_matrix)
     transform_s = np.dot(world_sensor_matrix, transform_h.T).T
@@ -352,7 +395,8 @@ def get_list_transform(vehicles_list, sensor):
 def filter_angle(vehicles_list, v_transform, v_transform_s, sensor):
     attr_dict = sensor.attributes
     VIEW_FOV = float(attr_dict["fov"])
-    v_angle = np.arctan2(v_transform_s[:, 1], v_transform_s[:, 0]) * 180 / np.pi
+    v_angle = np.arctan2(
+        v_transform_s[:, 1], v_transform_s[:, 0]) * 180 / np.pi
 
     selector = np.array(np.absolute(v_angle) < (int(VIEW_FOV) / 2))
     vehicles_list_f = [v for v, s in zip(vehicles_list, selector) if s]
@@ -376,7 +420,8 @@ def filter_distance(vehicles_list, v_transform, v_transform_s, sensor, max_dist=
 
 # Apply angle and distance filters in one function
 def filter_angle_distance(vehicles_list, sensor, max_dist=100):
-    vehicles_transform, vehicles_transform_s = get_list_transform(vehicles_list, sensor)
+    vehicles_transform, vehicles_transform_s = get_list_transform(
+        vehicles_list, sensor)
     vehicles_list, vehicles_transform, vehicles_transform_s = filter_distance(
         vehicles_list, vehicles_transform, vehicles_transform_s, sensor, max_dist
     )
@@ -399,7 +444,8 @@ def filter_lidar(lidar_data, camera, max_dist):
     CAM_VFOV = np.rad2deg(
         2 * np.arctan(np.tan(np.deg2rad(CAM_HFOV / 2)) * CAM_H / CAM_W)
     )
-    lidar_points = np.array([[p.point.y, -p.point.z, p.point.x] for p in lidar_data])
+    lidar_points = np.array(
+        [[p.point.y, -p.point.z, p.point.x] for p in lidar_data])
 
     dist2 = np.sum(np.square(lidar_points), axis=1).reshape((-1))
     p_angle_h = np.absolute(
@@ -412,7 +458,8 @@ def filter_lidar(lidar_data, camera, max_dist):
     selector = np.array(
         np.logical_and(
             np.logical_and(dist2 > 0, dist2 < (max_dist**2)),
-            np.logical_and(p_angle_h < (CAM_HFOV / 2), p_angle_v < (CAM_VFOV / 2)),
+            np.logical_and(p_angle_h < (CAM_HFOV / 2),
+                           p_angle_v < (CAM_VFOV / 2)),
         )
     )
     filtered_lidar = [pt for pt, s in zip(lidar_data, selector) if s]
@@ -446,7 +493,8 @@ def show_lidar(lidar_data, camera, carla_img, path, framenumber):
         "21": (0, 128, 255),
         "22": (255, 255, 255),
     }
-    lidar_np = np.array([[p.point.y, -p.point.z, p.point.x] for p in lidar_data])
+    lidar_np = np.array([[p.point.y, -p.point.z, p.point.x]
+                        for p in lidar_data])
     cam_k = get_camera_intrinsic(camera)
 
     # Project LIDAR 3D to Camera 2D
@@ -486,7 +534,8 @@ def show_lidar(lidar_data, camera, carla_img, path, framenumber):
 
 # Add actor ID of the vehcile hit by the lidar points
 def get_points_id(lidar_points, vehicles, camera, max_dist):
-    vehicles_f, vehicles_f_dist2 = filter_angle_distance(vehicles, camera, max_dist)
+    vehicles_f, vehicles_f_dist2 = filter_angle_distance(
+        vehicles, camera, max_dist)
 
     vehicles_f_dist2_new = []
     for i, v in enumerate(vehicles_f):
@@ -497,7 +546,8 @@ def get_points_id(lidar_points, vehicles, camera, max_dist):
     for p in lidar_points:
         sensor_world_matrix = get_matrix(camera.get_transform())
 
-        pw = np.dot(sensor_world_matrix, [[p.point.x], [p.point.y], [p.point.z], [1]])
+        pw = np.dot(sensor_world_matrix, [
+                    [p.point.x], [p.point.y], [p.point.z], [1]])
         pw = carla.Location(pw[0, 0], pw[1, 0], pw[2, 0])
         for v in vehicles_f:
             if v.bounding_box.contains(pw, v.get_transform()):

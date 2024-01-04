@@ -6,27 +6,35 @@ import json
 import time
 import math
 import queue
+import argparse
+
 
 def process_img(image):
     image.convert(cc.Raw)
-    image.save_to_disk('_out/camera_7.png')
+    image.save_to_disk('_out/camera_6.png')
     time.sleep(2)
+
 
 def transform2M(transform):
 
     location, rotation = transform.location, transform.rotation
     x, y, z = location.x, location.y, location.z
-    pitch, yaw, roll = math.radians(rotation.pitch), math.radians(rotation.yaw), math.radians(rotation.roll)
+    pitch, yaw, roll = math.radians(rotation.pitch), math.radians(
+        rotation.yaw), math.radians(rotation.roll)
 
-    Rz = np.array([[math.cos(yaw), -math.sin(yaw), 0], [math.sin(yaw), math.cos(yaw), 0], [0, 0, 1]])
-    Ry = np.array([[math.cos(pitch), 0, -math.sin(pitch)], [0, 1, 0], [math.sin(pitch), 0, math.cos(pitch)]])
-    Rx = np.array([[1, 0, 0], [0, math.cos(roll), math.sin(roll)], [0, -math.sin(roll), math.cos(roll)]])
+    Rz = np.array([[math.cos(yaw), -math.sin(yaw), 0],
+                  [math.sin(yaw), math.cos(yaw), 0], [0, 0, 1]])
+    Ry = np.array([[math.cos(pitch), 0, -math.sin(pitch)],
+                  [0, 1, 0], [math.sin(pitch), 0, math.cos(pitch)]])
+    Rx = np.array([[1, 0, 0], [0, math.cos(roll), math.sin(roll)], [
+                  0, -math.sin(roll), math.cos(roll)]])
     R = Rz.dot(Ry).dot(Rx)
     t = np.array([[x], [y], [z]])
 
     M = np.hstack((R, t))
-    M = np.vstack((M, np.array([[0,0,0,1]])))
+    M = np.vstack((M, np.array([[0, 0, 0, 1]])))
     return M
+
 
 def get_camera_intrinsic(sensor):
     VIEW_WIDTH = int(sensor.attributes['image_size_x'])
@@ -35,8 +43,10 @@ def get_camera_intrinsic(sensor):
     calibration = np.identity(3)
     calibration[0, 2] = VIEW_WIDTH / 2.0
     calibration[1, 2] = VIEW_HEIGHT / 2.0
-    calibration[0, 0] = calibration[1, 1] = VIEW_WIDTH / (2.0 * np.tan(VIEW_FOV * np.pi / 360.0))
+    calibration[0, 0] = calibration[1, 1] = VIEW_WIDTH / \
+        (2.0 * np.tan(VIEW_FOV * np.pi / 360.0))
     return calibration
+
 
 def get_camera_homography(sensor):
 
@@ -53,6 +63,7 @@ def get_camera_homography(sensor):
     result = (homography_matrix / homography_matrix[-1, -1].reshape((-1, 1)))
 
     return result
+
 
 def get_extrinsic_matrix(sensor):
 
@@ -85,10 +96,10 @@ def get_matrix(transform):
     matrix[2, 2] = c_p * c_r
     return matrix
 
+
 def mat2transform(matrix):
     s_p = matrix[2, 0]
     pitch = np.rad2deg(np.arcsin(s_p))
-
 
     c_p = np.cos(np.radians(pitch))
 
@@ -99,17 +110,20 @@ def mat2transform(matrix):
     yaw = np.rad2deg(np.arcsin(s_y))
 
     T = carla.Transform(
-                        carla.Location(x=matrix[0, 3], y=matrix[1, 3], z=matrix[2, 3]),
-                        carla.Rotation(pitch=pitch, yaw=yaw, roll=roll),
-                       )
+        carla.Location(x=matrix[0, 3], y=matrix[1, 3], z=matrix[2, 3]),
+        carla.Rotation(pitch=pitch, yaw=yaw, roll=roll),
+    )
 
     return T
+
 
 def get_camera_info(transform):
     location, rotation = transform.location, transform.rotation
     x, y, z = location.x, location.y, location.z
-    pitch, yaw, roll = math.radians(rotation.pitch), math.radians(rotation.yaw), math.radians(rotation.roll)
-    return x , y, z, pitch, yaw, roll
+    pitch, yaw, roll = math.radians(rotation.pitch), math.radians(
+        rotation.yaw), math.radians(rotation.roll)
+    return x, y, z, pitch, yaw, roll
+
 
 def retrieve_data(sensor_queue, frame, timeout=1):
     while True:
@@ -120,34 +134,50 @@ def retrieve_data(sensor_queue, frame, timeout=1):
         if data.frame == frame:
             return data
 
-def main():
 
+def set_args():
+    argparser = argparse.ArgumentParser(description=__doc__)
+    argparser.add_argument(
+        "--map_name", default="Town05", type=str, help="name of map: Town01-07"
+    )
+    argparser.add_argument(
+        "--number_of_vehicles",
+        default=150,
+        type=int,
+        help="number of vehicles (default: 150)",
+    )
+    args = argparser.parse_args()
+    return args
+
+def main():
+    args = set_args()
     path = './_out'
     nonvehicles_list = []
     client = carla.Client('127.0.0.1', 2000)
     client.set_timeout(10.0)
-
-    # client.load_world('Town10HD')
+    client.load_world(args.map_name)
     world = client.get_world()
 
     try:
-        spectator = world.get_spectator().get_transform()
+        q_list = []
+        tick_queue = queue.Queue()
+        bp_library = world.get_blueprint_library()
+    
+        while True:
+            world.on_tick(tick_queue.put)
+            q_list.append(tick_queue)
+
+    except KeyboardInterrupt:
+        print("Spectator postion set, spawn camera")
+    finally:
         settings = world.get_settings()
         if not settings.synchronous_mode:
             synchronous_master = True
             settings.fixed_delta_seconds = 0.1
             settings.synchronous_mode = True
             world.apply_settings(settings)
-        else:
-            synchronous_master = False
 
-        q_list = []
-        tick_queue = queue.Queue()
-        world.on_tick(tick_queue.put)
-        q_list.append(tick_queue)
-
-        bp_library = world.get_blueprint_library()
-
+        spectator = world.get_spectator().get_transform()
         camera_bp = bp_library.find('sensor.camera.rgb')
         camera_bp.set_attribute('sensor_tick', str(0.1))
         camera_bp.set_attribute('image_size_x', '1920')
@@ -156,6 +186,7 @@ def main():
         camera = world.spawn_actor(camera_bp, spectator)
         nonvehicles_list.append(camera)
         camera.listen(process_img)
+        world.tick()
 
         cam_queue = queue.Queue()
         q_list.append(cam_queue)
@@ -169,20 +200,21 @@ def main():
             nowFrame = world.tick()
             if time_sim >= 0.1:
                 frame_number += 1
-                x, y, z, pitch, yaw, roll = get_camera_info(camera.get_transform())
+                x, y, z, pitch, yaw, roll = get_camera_info(
+                    camera.get_transform())
                 intrinsic_matrix = get_camera_intrinsic(camera)
                 extrinsic_matrix = get_extrinsic_matrix(camera)
                 out_dict = {'intrinsic_matrix': intrinsic_matrix.tolist(),
-                                'extrinsic_matrix': extrinsic_matrix.tolist(),
-                                'x': x,
-                                'y': y,
-                                'z': z,
-                                'pitch': pitch,
-                                'yaw': yaw,
-                                'roll': roll
-                                }
+                            'extrinsic_matrix': extrinsic_matrix.tolist(),
+                            'x': x,
+                            'y': y,
+                            'z': z,
+                            'pitch': pitch,
+                            'yaw': yaw,
+                            'roll': roll
+                            }
 
-                filename = '_out/camera_7.txt'
+                filename = '_out/camera_6.txt'
                 if not os.path.exists(os.path.dirname(filename)):
                     os.makedirs(os.path.dirname(filename))
 
@@ -190,20 +222,16 @@ def main():
                     json.dump(out_dict, outfile, indent=4)
                 time_sim = 0
             time_sim += 0.1
-
-    finally:
-        try:
-            time.sleep(2)
-            nonvehicles_list[0].stop()
-        except:
-            print('Sensors has not been initiated')
+        print("Camera set")
 
         settings = world.get_settings()
         settings.synchronous_mode = False
         settings.fixed_delta_seconds = None
         world.apply_settings(settings)
 
-        client.apply_batch([carla.command.DestroyActor(x) for x in nonvehicles_list])
+        [x.stop() for x in nonvehicles_list]
+        client.apply_batch([carla.command.DestroyActor(x)
+                           for x in nonvehicles_list])
         print('Exit')
 
 

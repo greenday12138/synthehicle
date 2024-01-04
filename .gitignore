@@ -81,6 +81,10 @@ docs/_build/
 .pybuilder/
 target/
 
+# dataset output
+_out/
+*2024*/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
