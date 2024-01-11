@@ -1,13 +1,13 @@
 import argparse
-import os
+import os, sys
 import pathlib
 import warnings
 
 import numpy as np
 import json
 from tqdm import tqdm
-
-from .valid_scenes import VALID_TEST
+sys.path.append(os.getcwd())
+from tools.valid_scenes import VALID_TEST
 
 parser = argparse.ArgumentParser(
     description="MOTChallenge to Synthehicle JSON converter."
@@ -18,8 +18,9 @@ parser.add_argument(
     "-d",
     "--data_dir",
     type=str,
-    required=True,
+    required=False,
     help="Root directory of dataset, e.g., data/synthehicle/",
+    default="carla/generate_carla_data/scenes_non_overlap/Town10HD_Opt/day_2024-01-07_13-36-53/"
 )
 parser.add_argument(
     "-c",
@@ -27,6 +28,7 @@ parser.add_argument(
     type=str,
     required=False,
     help="Path to camera config file., e.g., splits/test.txt",
+    default="carla/generate_carla_data/scenes_non_overlap/Town10HD_Opt/camera_info/"
 )
 parser.add_argument(
     "-p",
@@ -40,15 +42,16 @@ parser.add_argument(
     "-o",
     "--output",
     type=str,
-    required=True,
+    required=False,
     help="Path to output json file, e.g., predictions.json",
+    default="ground_truth.json",
 )
 # python -m tools.mot_to_json -d {SYNTHEHICLE_DATA} -c splits/train.txt -o prediction.json -p prediction.txt
 
 args = parser.parse_args()
 
 if args.cameras is not None:
-    with open(args.cameras, "r") as file:
+    with open(os.path.join(os.getcwd(), args.cameras), "r") as file:
         cameras = file.read().splitlines()
 else:
     cameras = VALID_TEST

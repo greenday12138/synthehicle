@@ -52,7 +52,7 @@ def set_args():
         help="path to town information",
     )
     argparser.add_argument(
-        "--map_name", default="Town05", type=str, help="name of map: Town01-07"
+        "--map_name", default="Town10HD", type=str, help="name of map: Town01-07"
     )
     argparser.add_argument(
         "--fps", default=0.05, type=float, help="fps of generated data"
@@ -190,11 +190,11 @@ def main():
         if "camera" in file_name and file_name.endswith('txt'):
             num_cam += 1
 
-    config_path = scence_path + "camera_name.txt"
+    config_path = scence_path + "camera.txt"
     if not os.path.exists(os.path.dirname(config_path)):
         os.makedirs(os.path.dirname(config_path))
     with open(config_path, "w") as config_file:
-        for i in range(int(num_cam / 2)):
+        for i in range(int(num_cam)):
             config_file.write(f"C0{i+1}\n")
         config_file.close()
     camera_data_path = []
