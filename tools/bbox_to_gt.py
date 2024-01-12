@@ -2,7 +2,7 @@ import sys, os
 import json
 import numpy as np
 
-data_dir = "/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/rain_2024-01-06_15-02-33"
+data_dir = "/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/day_2024-01-05_13-27-23"
 
 if __name__ is "__main__":
     for cam in os.listdir(data_dir):
@@ -20,7 +20,7 @@ if __name__ is "__main__":
             data = json.loads(js)
             bboxs = np.zeros((len(data["vehicle_id"]), 10), dtype=np.int32)
             for j in range(len(data["vehicle_id"])):
-                bboxs[j] = np.array([i, data["vehicle_id"][j], 
+                bboxs[j] = np.array([i+1, data["vehicle_id"][j], 
                                      int(data["bboxes"][j][0][0]), 
                                      int(data["bboxes"][j][0][1]), 
                                      int(data["bboxes"][j][1][0] - data["bboxes"][j][0][0]), 
