@@ -1,7 +1,7 @@
 import os
 import time
 import carla
-
+import math
 from loguru import logger
 from datetime import datetime
 
@@ -15,7 +15,8 @@ import integrate_txt_file
 import img_2_video
 
 file_path = os.path.join(os.getcwd(), 'carla', 'generate_carla_data', 'multi_camera')
-
+ROUTE = {12, 35, 36, 37, 38, 34, 2343, 2344, 2034, 2035}
+IN_TOWN = {27, 13}
 
 def retrieve_data(sensor_queue, frame, timeout=1):
     while True:
@@ -52,7 +53,7 @@ def set_args():
         help="path to town information",
     )
     argparser.add_argument(
-        "--map_name", default="Town10HD", type=str, help="name of map: Town01-07"
+        "--map_name", default="Town05", type=str, help="name of map: Town01-07"
     )
     argparser.add_argument(
         "--fps", default=0.05, type=float, help="fps of generated data"
@@ -240,9 +241,9 @@ def main():
 
         # set spectator
         spectator = world.get_spectator()
-        spectator_location = carla.Location(x=30, y=-10, z=0)
-        spectator.set_transform(carla.Transform(spectator_location + carla.Location(z=350),
-                                                carla.Rotation(pitch=-90)))
+        spectator_location = carla.Location(x=0, y=0, z=0)
+        spectator.set_transform(carla.Transform(spectator_location + carla.Location(z=400),
+                                                carla.Rotation(roll=90, pitch=-90)))
         
         # town10 spectator: (30, -10, 250, pitch=-90)
         world.tick()
@@ -250,9 +251,26 @@ def main():
         # Get blueprints
         # --------------
         blueprints = world.get_blueprint_library().filter("vehicle.*")
+        blueprints = list(filter(lambda x: not(x.id.endswith('microlino') or 
+                                               x.id.endswith('fusorosa') or
+                                               x.id.endswith('firetruck')), blueprints))
         blueprintsWalkers = world.get_blueprint_library().filter("walker.pedestrian.*")
+        map = world.get_map()
+        spawn_points = map.get_spawn_points()
 
-        spawn_points = world.get_map().get_spawn_points()
+        # XXX: test code
+        # STRAIGHT = {12, 35, 36}
+        # CURVE = {37, 38, 34}
+        # JUNCTION = {2344, 2035}
+        spawn_transforms = spawn_points
+        spawn_points = []
+        for transform in spawn_transforms:
+            wp = map.get_waypoint(transform.location)
+            if wp.road_id in ROUTE:
+                spawn_points.append(transform)
+        # [world.debug.draw_point(point.location,size= 0.2, life_time=0.0) for point in spawn_points]
+        # world.tick()
+        
         number_of_spawn_points = len(spawn_points)
 
         if args.number_of_vehicles < number_of_spawn_points:
@@ -261,7 +279,7 @@ def main():
             msg = f"Requested {args.number_of_vehicles} vehicles, but could only find {number_of_spawn_points} spawn points"
             logger.warning(msg, args.number_of_vehicles,
                            number_of_spawn_points)
-            args.number_of_vehicles = number_of_spawn_points
+            # args.number_of_vehicles = number_of_spawn_points
 
         SpawnActor = carla.command.SpawnActor
         SetAutopilot = carla.command.SetAutopilot
@@ -271,9 +289,8 @@ def main():
         # Spawn vehicles
         # --------------
         batch = []
-        for n, transform in enumerate(spawn_points[: args.number_of_vehicles]):
-            if n >= args.number_of_vehicles:
-                break
+        for i in range(args.number_of_vehicles):
+            transform = random.choice(spawn_points)
             blueprint = random.choice(blueprints)
             # Taking out bicycles and motorcycles
             if int(blueprint.get_attribute("number_of_wheels")) > 2:
@@ -293,13 +310,21 @@ def main():
                         SetAutopilot(FutureActor, True)
                     )
                 )
-                spawn_points.pop(0)
+                # spawn_points.pop(0)
 
-        for response in client.apply_batch_sync(batch, synchronous_master):
-            if response.error:
-                logger.error(response.error)
-            else:
-                vehicles_list.append(response.actor_id)
+            for response in client.apply_batch_sync(batch, synchronous_master):
+                if response.error:
+                    logger.error(response.error)
+                else:
+                    vehicles_list.append(response.actor_id)
+                    actor = world.get_actor(response.actor_id)
+                    traffic_manager.auto_lane_change(actor, True)
+                    traffic_manager.ignore_lights_percentage(actor, 100)
+                    traffic_manager.set_route(actor,
+                            ['Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 
+                             'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight'])     
+            batch.clear()
+            [world.tick() for _ in range(4)]
 
         all_vehicles = world.get_actors().filter("vehicle.*")
         # set several of the cars as dangerous car
@@ -316,7 +341,7 @@ def main():
                 # traffic_manager.random_right_lanechange_percentage(
                 #     danger_car, 30)
                 traffic_manager.vehicle_percentage_speed_difference(
-                    danger_car, -160)
+                    danger_car, -200)
             else:
                 normal_car = all_vehicles[i]
                 # traffic_manager.auto_lane_change(normal_car, False)
@@ -324,7 +349,8 @@ def main():
                 #     normal_car, 5)
                 # traffic_manager.random_right_lanechange_percentage(
                 #     normal_car, 5)
-                possible_speed_different = [-60, -90, -100, -130, -140]
+                possible_speed_different = [0]
+                # possible_speed_different = [-60, -90, -100, -130, -140]
                 traffic_manager.vehicle_percentage_speed_difference(normal_car,
                                                                     possible_speed_different[i % len(possible_speed_different)])
         logger.info("Created %d vehicles" % len(vehicles_list))

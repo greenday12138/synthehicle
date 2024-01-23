@@ -2,7 +2,7 @@ import sys, os
 import json
 import numpy as np
 
-data_dir = "/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/day_2024-01-05_13-27-23"
+data_dir = "/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/day_2024-01-14_18-45-07"
 
 if __name__ is "__main__":
     for cam in os.listdir(data_dir):
@@ -15,6 +15,8 @@ if __name__ is "__main__":
 
         frame_bboxs = np.zeros((1, 10), dtype=np.int32)
         for i, frame in enumerate(frames):
+            # if i > 6600:
+            #     break
             frame_bbox = open(os.path.join(cam_path, 'out_bbox', frame), 'r', encoding='utf-8')
             js = frame_bbox.read()
             data = json.loads(js)

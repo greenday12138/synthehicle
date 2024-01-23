@@ -11,7 +11,7 @@ import argparse
 
 def process_img(image):
     image.convert(cc.Raw)
-    image.save_to_disk('_out/camera_6.png')
+    image.save_to_disk('_out/camera_9.png')
     time.sleep(2)
 
 
@@ -214,7 +214,7 @@ def main():
                             'roll': roll
                             }
 
-                filename = '_out/camera_6.txt'
+                filename = '_out/camera_9.txt'
                 if not os.path.exists(os.path.dirname(filename)):
                     os.makedirs(os.path.dirname(filename))
 
