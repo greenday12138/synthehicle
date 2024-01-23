@@ -71,7 +71,7 @@ def set_args():
     )
     argparser.add_argument(
         "--number_of_vehicles",
-        default=150,
+        default=300,
         type=int,
         help="number of vehicles (default: 150)",
     )
@@ -157,12 +157,6 @@ def main():
     client.set_timeout(100.0)
     map_name = args.map_name+'_Opt'
     client.load_world(map_name)
-    # if args.map_name is "Town01":
-    #     args.number_of_vehicles = 150
-    #     args.number_of_dangerous_vehicles = 0
-    # else:
-    args.number_of_vehicles = 400
-    args.number_of_dangerous_vehicles = 50
     logger.info("***** Loading map *****")
     world = client.get_world()
     # remove parked vehicle
@@ -266,9 +260,11 @@ def main():
         spawn_points = []
         for transform in spawn_transforms:
             wp = map.get_waypoint(transform.location)
-            if wp.road_id in ROUTE:
+            if wp.road_id is 12:
                 spawn_points.append(transform)
-        # [world.debug.draw_point(point.location,size= 0.2, life_time=0.0) for point in spawn_points]
+            # if wp.road_id in ROUTE:
+            #     spawn_points.append(transform)
+        # [world.debug.draw_point(point.location,size= 0.1, life_time=0.0) for point in spawn_points]
         # world.tick()
         
         number_of_spawn_points = len(spawn_points)
