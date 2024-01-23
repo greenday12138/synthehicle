@@ -136,6 +136,37 @@ def remove_unnecessary_objects(world):
             objs.add(obj.id)
     world.enable_environment_objects(objs, False)
 
+def spawn_vehicle(transform, blueprint, traffic_manager, world):
+    SpawnActor = carla.command.SpawnActor
+    SetAutopilot = carla.command.SetAutopilot
+    FutureActor = carla.command.FutureActor
+    # Taking out bicycles and motorcycles
+    if int(blueprint.get_attribute("number_of_wheels")) > 2:
+        if blueprint.has_attribute("color"):
+            color = random.choice(
+                blueprint.get_attribute("color").recommended_values
+            )
+            blueprint.set_attribute("color", color)
+        if blueprint.has_attribute("driver_id"):
+            driver_id = random.choice(
+                blueprint.get_attribute("driver_id").recommended_values
+            )
+            # blueprint.set_attribute("driver_id", id)
+        blueprint.set_attribute("role_name", "autopilot")
+
+        actor = world.try_spawn_actor(blueprint, transform)
+        if actor is not None:
+            actor.set_autopilot(enabled=True, port=traffic_manager.get_port())
+            traffic_manager.auto_lane_change(actor, True)
+            traffic_manager.ignore_lights_percentage(actor, 100)
+            traffic_manager.set_route(actor,
+                                      ['Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight',
+                                       'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight'])
+        
+            return actor.actor_id
+    
+    return None
+
 def main():
     args = set_args()
     logger.info(args)
@@ -277,49 +308,12 @@ def main():
                            number_of_spawn_points)
             # args.number_of_vehicles = number_of_spawn_points
 
-        SpawnActor = carla.command.SpawnActor
-        SetAutopilot = carla.command.SetAutopilot
-        FutureActor = carla.command.FutureActor
-
         # --------------
         # Spawn vehicles
         # --------------
-        batch = []
         for i in range(args.number_of_vehicles):
-            transform = random.choice(spawn_points)
-            blueprint = random.choice(blueprints)
-            # Taking out bicycles and motorcycles
-            if int(blueprint.get_attribute("number_of_wheels")) > 2:
-                if blueprint.has_attribute("color"):
-                    color = random.choice(
-                        blueprint.get_attribute("color").recommended_values
-                    )
-                    blueprint.set_attribute("color", color)
-                if blueprint.has_attribute("driver_id"):
-                    driver_id = random.choice(
-                        blueprint.get_attribute("driver_id").recommended_values
-                    )
-                    blueprint.set_attribute("driver_id", driver_id)
-                blueprint.set_attribute("role_name", "autopilot")
-                batch.append(
-                    SpawnActor(blueprint, transform).then(
-                        SetAutopilot(FutureActor, True)
-                    )
-                )
-                # spawn_points.pop(0)
-
-            for response in client.apply_batch_sync(batch, synchronous_master):
-                if response.error:
-                    logger.error(response.error)
-                else:
-                    vehicles_list.append(response.actor_id)
-                    actor = world.get_actor(response.actor_id)
-                    traffic_manager.auto_lane_change(actor, True)
-                    traffic_manager.ignore_lights_percentage(actor, 100)
-                    traffic_manager.set_route(actor,
-                            ['Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 
-                             'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight'])     
-            batch.clear()
+            actor_id = spawn_vehicle(random.choice(spawn_points), random.choice(blueprints), traffic_manager, world)
+            vehicles_list.append(actor_id)
             [world.tick() for _ in range(4)]
 
         all_vehicles = world.get_actors().filter("vehicle.*")
@@ -603,10 +597,27 @@ def main():
         save_segm = False
         logs_path = os.path.join(scence_path, "logs.txt")
         logger.info("**** Begin the loop ****")
+        vehicles_raw = None
         while True:
             if frame_number == args.number_of_frame:
                 break
             # Extract the available data
+            if vehicles_raw is None:
+                vehicles_raw = world.get_actors().filter("vehicle.*")
+            else:
+                for vehicle in vehicles_raw:
+                    wp = map.get_waypoint(vehicle.get_location())
+                    if wp.road_id is 38 and wp.lane_id in {-1, -2, -3} and wp.s > 260.0:
+                        vehicle.destroy()
+                        vehicles_list.remove(vehicle.actor_id)
+                        actor_id = spawn_vehicle(random.choice(spawn_points), random.choice(blueprints), traffic_manager, world)
+                        vehicles_list.append(actor_id)
+                    if wp.raod_id is 34 and wp.lane_id in {1, 2, 3} and wp.s < 30.0:
+                        vehicle.destroy()
+                        vehicles_list.remove(vehicle.actor_id)
+                        actor_id = spawn_vehicle(random.choice(spawn_points), random.choice(blueprints), traffic_manager, world)
+                        vehicles_list.append(actor_id)
+                
             t1 = time.time()
             nowFrame = world.tick()
 
