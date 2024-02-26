@@ -97,7 +97,7 @@ def set_args():
         "--resolution", default="720p", type=str, help="resolution of generated images"
     )
     argparser.add_argument(
-        "--number_of_frame", default=10000, type=int, help="number of frames generated"
+        "--number_of_frame", default=2400, type=int, help="number of frames generated"
     )
     # TODO:！！！
     argparser.add_argument(
@@ -156,14 +156,15 @@ def spawn_vehicle(transform, blueprint, traffic_manager, world):
 
         actor = world.try_spawn_actor(blueprint, transform)
         if actor is not None:
-            actor.set_autopilot(enabled=True, port=traffic_manager.get_port())
+            actor.set_autopilot(enabled=True, tm_port=traffic_manager.get_port())
             traffic_manager.auto_lane_change(actor, True)
             traffic_manager.ignore_lights_percentage(actor, 100)
+            traffic_manager.vehicle_percentage_speed_difference(actor, 40)
             traffic_manager.set_route(actor,
                                       ['Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight',
                                        'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight', 'Straight'])
         
-            return actor.actor_id
+            return actor.id
     
     return None
 
@@ -278,7 +279,8 @@ def main():
         blueprints = world.get_blueprint_library().filter("vehicle.*")
         blueprints = list(filter(lambda x: not(x.id.endswith('microlino') or 
                                                x.id.endswith('fusorosa') or
-                                               x.id.endswith('firetruck')), blueprints))
+                                               x.id.endswith('firetruck') or
+                                               x.id.endswith('cybertruck')), blueprints))
         blueprintsWalkers = world.get_blueprint_library().filter("walker.pedestrian.*")
         map = world.get_map()
         spawn_points = map.get_spawn_points()
@@ -289,10 +291,16 @@ def main():
         # JUNCTION = {2344, 2035}
         spawn_transforms = spawn_points
         spawn_points = []
+        spawn_points_34 = []
+        spawn_points_38 = []
         for transform in spawn_transforms:
             wp = map.get_waypoint(transform.location)
             if wp.road_id is 12:
                 spawn_points.append(transform)
+                if wp.lane_id in {2, 3, 4}:
+                    spawn_points_38.append(transform)
+                if wp.lane_id in {-1, -2, -3}:
+                    spawn_points_34.append(transform)
             # if wp.road_id in ROUTE:
             #     spawn_points.append(transform)
         # [world.debug.draw_point(point.location,size= 0.1, life_time=0.0) for point in spawn_points]
@@ -313,7 +321,8 @@ def main():
         # --------------
         for i in range(args.number_of_vehicles):
             actor_id = spawn_vehicle(random.choice(spawn_points), random.choice(blueprints), traffic_manager, world)
-            vehicles_list.append(actor_id)
+            if actor_id is not None:
+                vehicles_list.append(actor_id)
             [world.tick() for _ in range(4)]
 
         all_vehicles = world.get_actors().filter("vehicle.*")
@@ -605,18 +614,23 @@ def main():
             if vehicles_raw is None:
                 vehicles_raw = world.get_actors().filter("vehicle.*")
             else:
-                for vehicle in vehicles_raw:
-                    wp = map.get_waypoint(vehicle.get_location())
-                    if wp.road_id is 38 and wp.lane_id in {-1, -2, -3} and wp.s > 260.0:
-                        vehicle.destroy()
-                        vehicles_list.remove(vehicle.actor_id)
-                        actor_id = spawn_vehicle(random.choice(spawn_points), random.choice(blueprints), traffic_manager, world)
-                        vehicles_list.append(actor_id)
-                    if wp.raod_id is 34 and wp.lane_id in {1, 2, 3} and wp.s < 30.0:
-                        vehicle.destroy()
-                        vehicles_list.remove(vehicle.actor_id)
-                        actor_id = spawn_vehicle(random.choice(spawn_points), random.choice(blueprints), traffic_manager, world)
-                        vehicles_list.append(actor_id)
+                for vehicle in vehicles_raw.filter("*"):
+                    if vehicle.is_alive:
+                        wp = map.get_waypoint(vehicle.get_location())
+                        if wp.road_id is 38 and wp.lane_id in {-1, -2, -3} and wp.s > 280.0:
+                            vehicle.destroy()
+                            vehicles_list.remove(vehicle.id)
+                        if wp.road_id is 34 and wp.lane_id in {2, 3, 4} and wp.s < 20.0:
+                            vehicle.destroy()
+                            vehicles_list.remove(vehicle.id)
+
+            if(len(vehicles_raw) < args.number_of_vehicles):                
+                right_actor = spawn_vehicle(random.choice(spawn_points_34), random.choice(blueprints), traffic_manager, world)
+                left_actor = spawn_vehicle(random.choice(spawn_points_38), random.choice(blueprints), traffic_manager, world)
+                if right_actor is not None:
+                    vehicles_list.append(right_actor)
+                if left_actor is not None:
+                    vehicles_list.append(left_actor)
                 
             t1 = time.time()
             nowFrame = world.tick()

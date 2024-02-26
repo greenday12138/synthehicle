@@ -29,7 +29,7 @@ def img2video(cam_list):
         video.release()
 
 
-# img2video("/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/day_2024-01-14_18-45-07")
+# img2video("/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/day_2024-02-24_21-30-01")
 # def main():
 
 

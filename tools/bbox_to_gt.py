@@ -2,7 +2,7 @@ import sys, os
 import json
 import numpy as np
 
-data_dir = "/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/day_2024-01-14_18-45-07"
+data_dir = "/home/ubuntu2004/Git/synthehicle/carla/generate_carla_data/scenes_non_overlap/Town05_Opt/day_2024-02-24_21-30-01"
 
 if __name__ is "__main__":
     for cam in os.listdir(data_dir):
