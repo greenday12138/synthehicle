@@ -323,7 +323,7 @@ def main():
             actor_id = spawn_vehicle(random.choice(spawn_points), random.choice(blueprints), traffic_manager, world)
             if actor_id is not None:
                 vehicles_list.append(actor_id)
-            [world.tick() for _ in range(4)]
+            [world.tick() for _ in range(8)]
 
         all_vehicles = world.get_actors().filter("vehicle.*")
         # set several of the cars as dangerous car
@@ -607,6 +607,7 @@ def main():
         logs_path = os.path.join(scence_path, "logs.txt")
         logger.info("**** Begin the loop ****")
         vehicles_raw = None
+        delay = 0
         while True:
             if frame_number == args.number_of_frame:
                 break
@@ -624,14 +625,19 @@ def main():
                             vehicle.destroy()
                             vehicles_list.remove(vehicle.id)
 
-            if(len(vehicles_raw) < args.number_of_vehicles):                
+            if(len(vehicles_raw) < args.number_of_vehicles) and delay == 0:                
                 right_actor = spawn_vehicle(random.choice(spawn_points_34), random.choice(blueprints), traffic_manager, world)
                 left_actor = spawn_vehicle(random.choice(spawn_points_38), random.choice(blueprints), traffic_manager, world)
                 if right_actor is not None:
                     vehicles_list.append(right_actor)
                 if left_actor is not None:
                     vehicles_list.append(left_actor)
-                
+            
+            if delay is 0:
+                delay = random.choice([8, 9, 10, 11, 12, 13, 14, 15])
+            else:
+                delay -= 1
+
             t1 = time.time()
             nowFrame = world.tick()
 
