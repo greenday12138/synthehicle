@@ -97,7 +97,7 @@ def set_args():
         "--resolution", default="720p", type=str, help="resolution of generated images"
     )
     argparser.add_argument(
-        "--number_of_frame", default=2400, type=int, help="number of frames generated"
+        "--number_of_frame", default=10000, type=int, help="number of frames generated"
     )
     # TODO:！！！
     argparser.add_argument(
@@ -323,35 +323,35 @@ def main():
             actor_id = spawn_vehicle(random.choice(spawn_points), random.choice(blueprints), traffic_manager, world)
             if actor_id is not None:
                 vehicles_list.append(actor_id)
-            [world.tick() for _ in range(8)]
+            [world.tick() for _ in range(15)]
 
         all_vehicles = world.get_actors().filter("vehicle.*")
         # set several of the cars as dangerous car
-        for i in range(len(all_vehicles)):
-            if i < args.number_of_dangerous_vehicles:
-                danger_car = all_vehicles[i]
-                # crazy car ignore traffic light, do not keep safe distance, and very fast
-                # if i < args.number_of_dangerous_vehicles/4:
-                #     traffic_manager.ignore_lights_percentage(danger_car, 100)
-                traffic_manager.distance_to_leading_vehicle(danger_car, 5)
-                # traffic_manager.auto_lane_change(danger_car, False)
-                # traffic_manager.random_left_lanechange_percentage(
-                #     danger_car, 30)
-                # traffic_manager.random_right_lanechange_percentage(
-                #     danger_car, 30)
-                traffic_manager.vehicle_percentage_speed_difference(
-                    danger_car, -200)
-            else:
-                normal_car = all_vehicles[i]
-                # traffic_manager.auto_lane_change(normal_car, False)
-                # traffic_manager.random_left_lanechange_percentage(
-                #     normal_car, 5)
-                # traffic_manager.random_right_lanechange_percentage(
-                #     normal_car, 5)
-                possible_speed_different = [0]
-                # possible_speed_different = [-60, -90, -100, -130, -140]
-                traffic_manager.vehicle_percentage_speed_difference(normal_car,
-                                                                    possible_speed_different[i % len(possible_speed_different)])
+        # for i in range(len(all_vehicles)):
+        #     if i < args.number_of_dangerous_vehicles:
+        #         danger_car = all_vehicles[i]
+        #         # crazy car ignore traffic light, do not keep safe distance, and very fast
+        #         # if i < args.number_of_dangerous_vehicles/4:
+        #         #     traffic_manager.ignore_lights_percentage(danger_car, 100)
+        #         traffic_manager.distance_to_leading_vehicle(danger_car, 5)
+        #         # traffic_manager.auto_lane_change(danger_car, False)
+        #         # traffic_manager.random_left_lanechange_percentage(
+        #         #     danger_car, 30)
+        #         # traffic_manager.random_right_lanechange_percentage(
+        #         #     danger_car, 30)
+        #         traffic_manager.vehicle_percentage_speed_difference(
+        #             danger_car, -200)
+        #     else:
+        #         normal_car = all_vehicles[i]
+        #         # traffic_manager.auto_lane_change(normal_car, False)
+        #         # traffic_manager.random_left_lanechange_percentage(
+        #         #     normal_car, 5)
+        #         # traffic_manager.random_right_lanechange_percentage(
+        #         #     normal_car, 5)
+        #         possible_speed_different = [0]
+        #         # possible_speed_different = [-60, -90, -100, -130, -140]
+        #         traffic_manager.vehicle_percentage_speed_difference(normal_car,
+        #                                                             possible_speed_different[i % len(possible_speed_different)])
         logger.info("Created %d vehicles" % len(vehicles_list))
 
         all_traffic_light = world.get_actors().filter("traffic.traffic_light*")
@@ -634,7 +634,7 @@ def main():
                     vehicles_list.append(left_actor)
             
             if delay is 0:
-                delay = random.choice([8, 9, 10, 11, 12, 13, 14, 15])
+                delay = random.choice([13, 14, 15, 16, 17, 18, 19, 20])
             else:
                 delay -= 1
 
